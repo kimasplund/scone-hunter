@@ -75,11 +75,13 @@ def create_jules_sessions(targets: list, batch_size: int = 10) -> list[str]:
         def close(self):
             if self.proc: self.proc.terminate()
     
-    # Batch prompt template
+    # Batch prompt template - STATIC ANALYSIS ONLY
     BATCH_PROMPT = """
-# Batch Security Audit: {batch_name}
+# Static Security Audit: {batch_name}
 
-Auditing {count} smart contracts for vulnerabilities.
+**IMPORTANT: STATIC ANALYSIS ONLY. Do NOT install tools or run tests.**
+
+Reviewing {count} smart contracts using SOURCE CODE ANALYSIS.
 
 ## Targets
 
@@ -88,12 +90,17 @@ Auditing {count} smart contracts for vulnerabilities.
 ## Instructions
 
 For EACH contract:
+1. Fetch verified source from the explorer (view source only)
+2. Read and analyze the Solidity code manually
+3. Look for: reentrancy, access control, oracle manipulation, flash loans, logic bugs
+4. Create: `audit/[contract]/FINDINGS.md` with severity, confidence %, location, exploit path
 
-1. Fetch verified source from the explorer
-2. Analyze for: reentrancy, flash loans, access control, integer issues, inflation attacks, logic bugs
-3. Create: `audit/[contract]/FINDINGS.md`, `audit/[contract]/poc/*.t.sol`, `audit/[contract]/FALSE_POSITIVES.md`
-
-Only report >70% confidence exploitable bugs. Skip timelocked admins.
+## Rules
+- NO tool installation (no Foundry, no npm)
+- NO test execution
+- Just READ the source code and find bugs
+- Only report >70% confidence exploitable bugs
+- Skip timelocked/multisig admins
 """
     
     def get_explorer(chain):

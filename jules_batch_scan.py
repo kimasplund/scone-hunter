@@ -114,11 +114,13 @@ class JulesMCPClient:
             self.proc.terminate()
 
 
-# Multi-contract audit prompt
+# Multi-contract audit prompt - STATIC ANALYSIS ONLY
 BATCH_PROMPT = """
-# Batch Security Audit: {batch_name}
+# Static Security Audit: {batch_name}
 
-You are auditing {count} smart contracts for vulnerabilities.
+**IMPORTANT: This is STATIC ANALYSIS ONLY. Do NOT install tools, run tests, or execute code.**
+
+You are reviewing {count} smart contracts for vulnerabilities using SOURCE CODE ANALYSIS.
 
 ## Targets
 
@@ -126,35 +128,48 @@ You are auditing {count} smart contracts for vulnerabilities.
 
 ## Instructions
 
-For EACH contract above:
+For EACH contract:
 
-1. Fetch verified source from the explorer link
-2. Analyze for:
-   - Reentrancy
-   - Flash loan / oracle manipulation  
-   - Access control bypasses
-   - Integer overflow/underflow
-   - ERC-4626 inflation attacks
-   - Logic bugs
+1. **Fetch source code** from the explorer link (view verified source)
+2. **Read and analyze** the Solidity code manually
+3. **Look for these patterns:**
+   - Reentrancy: external calls before state changes
+   - Access control: missing onlyOwner, unprotected functions
+   - Integer issues: unchecked math in older Solidity
+   - Oracle manipulation: price feeds without TWAP
+   - Flash loan vectors: single-tx arbitrage paths
+   - Logic bugs: edge cases, off-by-one, rounding
+   - Centralization: admin can rug (unless timelock)
 
-3. Create files for each contract:
-   - `audit/[contract-name]/FINDINGS.md`
-   - `audit/[contract-name]/poc/*.t.sol` (Foundry tests)
-   - `audit/[contract-name]/FALSE_POSITIVES.md`
+4. **Create markdown files:**
+   - `audit/[contract-name]/FINDINGS.md` — vulnerabilities found
+   - `audit/[contract-name]/ANALYSIS.md` — code review notes
 
-## Output Format
+## Output Format (FINDINGS.md)
 
-For each finding, include:
-- Severity: Critical/High/Medium/Low
-- Confidence: 0-100%
-- Exploit path (step by step)
-- Estimated profit vs gas cost
-- PoC code
+```markdown
+# [Contract Name] Security Findings
 
-SKIP contracts where admin is timelock/multisig (already protected).
-Only report findings with >70% confidence.
+## Finding 1: [Title]
+- **Severity:** Critical/High/Medium/Low
+- **Confidence:** X%
+- **Location:** `Contract.sol:L123`
+- **Description:** What's wrong
+- **Exploit Path:** Step-by-step how to exploit
+- **Recommendation:** How to fix
 
-Start with Contract 1 and work through all {count} contracts.
+## Finding 2: ...
+```
+
+## Rules
+- **NO tool installation** (no Foundry, no npm, no pip)
+- **NO test execution** (no forge test, no hardhat)
+- **NO compilation** needed — just read the source
+- Skip contracts where admin is timelock/multisig (already protected)
+- Only report findings with >70% confidence
+- Focus on EXPLOITABLE bugs, not theoretical issues
+
+Start analyzing Contract 1 now.
 """
 
 
