@@ -11,6 +11,7 @@ from .scanner import Scanner
 from .analyzer import Analyzer
 from .config import Config
 from .notifier import Notifier
+from .deep_hunter import DeepHunter, HIGH_VALUE_TARGETS
 
 app = typer.Typer(
     name="scone-hunter",
@@ -134,6 +135,91 @@ def watch(
         asyncio.run(scanner.watch_deployments(chain=chain, webhook=webhook))
     except KeyboardInterrupt:
         console.print("\n[yellow]Stopped watching.[/yellow]")
+
+
+@app.command()
+def hunt(
+    address: str = typer.Argument(..., help="Contract address to deep-analyze"),
+    chain: str = typer.Option("ethereum", help="Chain (ethereum, bsc, base)"),
+    program: Optional[str] = typer.Option(None, help="Bug bounty program name"),
+    max_bounty: int = typer.Option(100000, help="Max bounty in USD"),
+):
+    """Deep hunt mode: multi-model consensus + adversarial analysis."""
+    console.print(f"[bold red]🎯 DEEP HUNT MODE[/bold red]")
+    console.print(f"Target: {address}")
+    console.print(f"Chain: {chain} | Program: {program or 'Unknown'}")
+    console.print(f"Max Bounty: ${max_bounty:,}")
+    console.print()
+    console.print("[yellow]Running multi-model analysis...[/yellow]")
+    console.print("  • OpenAI GPT-4o (standard)")
+    console.print("  • Gemini (second opinion)")
+    console.print("  • Adversarial mode (attack vectors)")
+    console.print()
+    
+    config = Config()
+    hunter = DeepHunter(config)
+    
+    result = asyncio.run(hunter.hunt(
+        address=address,
+        chain=chain,
+        bounty_program=program,
+        max_bounty=max_bounty,
+    ))
+    
+    # Display results
+    if result.high_confidence_attacks:
+        console.print(f"\n[bold red]🎯 {len(result.high_confidence_attacks)} HIGH-CONFIDENCE ATTACKS FOUND:[/bold red]\n")
+        
+        for i, attack in enumerate(result.high_confidence_attacks, 1):
+            conf = attack.get('confidence_percent', 0)
+            profit = attack.get('estimated_profit_usd', 0)
+            diff = attack.get('difficulty', 'unknown')
+            
+            color = "red" if conf >= 80 else "orange3" if conf >= 60 else "yellow"
+            
+            console.print(f"[{color}]#{i} {attack.get('name', 'Unknown')}[/{color}]")
+            console.print(f"    Type: {attack.get('type', 'other')}")
+            console.print(f"    Confidence: {conf}% | Difficulty: {diff}")
+            console.print(f"    Est. Profit: ${profit:,}")
+            
+            if attack.get('steps'):
+                console.print("    Steps:")
+                for step in attack['steps'][:3]:
+                    console.print(f"      → {step}")
+            console.print()
+    
+    if result.confirmed_vulns:
+        console.print(f"[green]✓ Consensus vulnerabilities: {', '.join(result.confirmed_vulns)}[/green]")
+    
+    if result.openai_result and result.openai_result.vulnerabilities:
+        console.print(f"\nOpenAI found: {len(result.openai_result.vulnerabilities)} issues")
+    
+    console.print(f"\nAnalysis time: {result.analysis_time:.1f}s")
+    
+    if result.high_confidence_attacks:
+        console.print(f"\n[bold green]💰 Potential bounty: ${max_bounty:,}[/bold green]")
+        console.print("[yellow]Next: Validate with Foundry PoC before reporting![/yellow]")
+
+
+@app.command()
+def targets():
+    """List high-value bounty program targets."""
+    console.print("[bold green]🎯 HIGH-VALUE TARGETS[/bold green]\n")
+    
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Program")
+    table.add_column("Max Bounty")
+    table.add_column("Chain")
+    
+    for target in HIGH_VALUE_TARGETS:
+        table.add_row(
+            target["name"],
+            f"${target['max_bounty']:,}",
+            target["chain"],
+        )
+    
+    console.print(table)
+    console.print("\n[dim]Use: hunt <address> --program <name> --max-bounty <amount>[/dim]")
 
 
 @app.command()
