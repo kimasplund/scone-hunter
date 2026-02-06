@@ -7,6 +7,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Force unbuffered output
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent))
 

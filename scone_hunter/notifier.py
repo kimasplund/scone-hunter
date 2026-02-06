@@ -74,16 +74,18 @@ class Notifier:
         message = self.format_alert(result)
         
         try:
-            # Use clawdbot CLI to send message
-            cmd = [
-                "clawdbot", "send",
-                "--channel", "whatsapp",
-                "--to", self.config.whatsapp_alert_number,
-                "--message", message
-            ]
-            
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            return result.returncode == 0
+            # Write alert to file for pickup (clawdbot doesn't have send command)
+            import json
+            from pathlib import Path
+            alert_file = Path.home() / ".scone-hunter" / "alerts" / f"alert_{int(__import__('time').time())}.json"
+            alert_file.parent.mkdir(parents=True, exist_ok=True)
+            alert_file.write_text(json.dumps({
+                "to": self.config.whatsapp_alert_number,
+                "message": message,
+                "contract": result.contract.address,
+            }))
+            print(f"📲 Alert saved: {alert_file}")
+            return True
             
         except Exception as e:
             print(f"WhatsApp alert failed: {e}")

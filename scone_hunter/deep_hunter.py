@@ -260,7 +260,7 @@ class DeepHunter:
 *Top Attack:* {top_attack.get('name', 'Unknown')}
 *Type:* {top_attack.get('type', 'other')}
 *Confidence:* {top_attack.get('confidence_percent', 0)}%
-*Est. Profit:* ${top_attack.get('estimated_profit_usd', 0):,}
+*Est. Profit:* ${int(top_attack.get('estimated_profit_usd', 0) or 0):,}
 *Difficulty:* {top_attack.get('difficulty', 'unknown')}
 
 *Consensus Vulns:* {', '.join(result.confirmed_vulns) or 'None'}
