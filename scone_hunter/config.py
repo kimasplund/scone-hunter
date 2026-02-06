@@ -15,7 +15,9 @@ class Config:
     # AI APIs
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    gemini_api_key: str = ""
     ai_model: str = "claude-sonnet-4-5-20250514"
+    use_gemini: bool = False  # Use Gemini CLI as analyzer
     
     # Blockchain APIs
     etherscan_api_key: str = ""
@@ -36,6 +38,7 @@ class Config:
     slack_webhook_url: str = ""
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    whatsapp_alert_number: str = ""  # Phone number for WhatsApp alerts via Clawdbot
     
     # Scanner settings
     min_tvl_usd: int = 10000
@@ -52,7 +55,9 @@ class Config:
         # AI APIs
         self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
         self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
         self.ai_model = os.getenv("AI_MODEL", self.ai_model)
+        self.use_gemini = os.getenv("USE_GEMINI", "").lower() in ("true", "1", "yes")
         
         # Blockchain APIs
         self.etherscan_api_key = os.getenv("ETHERSCAN_API_KEY", "")
@@ -77,6 +82,7 @@ class Config:
         self.slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "")
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        self.whatsapp_alert_number = os.getenv("WHATSAPP_ALERT_NUMBER", "")
         
         # Scanner settings
         self.min_tvl_usd = int(os.getenv("MIN_TVL_USD", self.min_tvl_usd))

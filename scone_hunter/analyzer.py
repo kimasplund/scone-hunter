@@ -1,6 +1,7 @@
 """AI-powered contract analyzer."""
 
 import json
+import subprocess
 import time
 from typing import Optional
 
@@ -76,14 +77,21 @@ class Analyzer:
     
     def __init__(self, config: Config):
         self.config = config
-        # Use OpenAI if available, otherwise Anthropic
-        if config.openai_api_key:
+        self.use_gemini = config.use_gemini
+        self.use_openai = False
+        self.client = None
+        
+        if self.use_gemini:
+            # Will use Gemini CLI
+            pass
+        elif config.openai_api_key:
             self.client = openai.OpenAI(api_key=config.openai_api_key)
             self.use_openai = True
-        else:
+        elif config.anthropic_api_key:
             import anthropic
             self.client = anthropic.Anthropic(api_key=config.anthropic_api_key)
             self.use_openai = False
+        
         self.http = httpx.AsyncClient(timeout=60.0)
     
     async def analyze_contract(
@@ -177,6 +185,39 @@ class Analyzer:
         
         return None
     
+    def _run_gemini_analysis(self, prompt: str) -> tuple[str, int]:
+        """Run analysis using Gemini CLI."""
+        import tempfile
+        
+        # Write prompt to temp file (Gemini CLI reads from stdin or file)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(prompt)
+            prompt_file = f.name
+        
+        try:
+            # Call Gemini CLI
+            result = subprocess.run(
+                ['gemini', '-p', prompt],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env={**dict(__import__('os').environ), 'GEMINI_API_KEY': self.config.gemini_api_key}
+            )
+            
+            response_text = result.stdout if result.returncode == 0 else result.stderr
+            # Gemini CLI doesn't expose token counts easily
+            tokens_used = len(prompt.split()) + len(response_text.split())  # Rough estimate
+            
+            return response_text, tokens_used
+            
+        except subprocess.TimeoutExpired:
+            return '{"vulnerabilities": [], "overall_risk": "unknown", "summary": "Analysis timed out"}', 0
+        except Exception as e:
+            return f'{{"vulnerabilities": [], "overall_risk": "unknown", "summary": "Error: {str(e)}"}}', 0
+        finally:
+            import os
+            os.unlink(prompt_file)
+    
     async def _get_contract_context(self, address: str, chain: str) -> str:
         """Get additional context about the contract (TVL, etc)."""
         # TODO: Fetch TVL from DeFiLlama
@@ -205,7 +246,10 @@ class Analyzer:
             "deep": 8000,
         }.get(depth, 4000)
         
-        if self.use_openai:
+        if self.use_gemini:
+            # Use Gemini CLI
+            response_text, tokens_used = self._run_gemini_analysis(prompt)
+        elif self.use_openai:
             response = self.client.chat.completions.create(
                 model=self.config.ai_model or "gpt-4o",
                 max_tokens=max_tokens,

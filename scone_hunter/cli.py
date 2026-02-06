@@ -10,6 +10,7 @@ from rich.table import Table
 from .scanner import Scanner
 from .analyzer import Analyzer
 from .config import Config
+from .notifier import Notifier
 
 app = typer.Typer(
     name="scone-hunter",
@@ -47,14 +48,27 @@ def analyze(
     address: str = typer.Argument(..., help="Contract address to analyze"),
     chain: str = typer.Option("ethereum", help="Chain (ethereum, bsc, base)"),
     depth: str = typer.Option("standard", help="Analysis depth (quick, standard, deep)"),
+    alert: bool = typer.Option(True, help="Send alert if vulnerabilities found"),
 ):
     """Analyze a specific contract for vulnerabilities."""
+    config = Config()
+    
+    # Show which AI backend is being used
+    if config.use_gemini:
+        backend = "Gemini CLI"
+    elif config.openai_api_key:
+        backend = f"OpenAI ({config.ai_model})"
+    elif config.anthropic_api_key:
+        backend = f"Claude ({config.ai_model})"
+    else:
+        backend = "Unknown"
+    
     console.print(f"[bold green]🔍 Analyzing contract[/bold green]")
     console.print(f"Address: {address}")
-    console.print(f"Chain: {chain} | Depth: {depth}")
+    console.print(f"Chain: {chain} | Depth: {depth} | AI: {backend}")
     
-    config = Config()
     analyzer = Analyzer(config)
+    notifier = Notifier(config)
     
     result = asyncio.run(analyzer.analyze_contract(
         address=address,
@@ -78,20 +92,29 @@ def analyze(
                 "high": "orange3",
                 "medium": "yellow",
                 "low": "blue",
-            }.get(vuln.severity, "white")
+            }.get(vuln.severity.value, "white")
             
             table.add_row(
-                f"[{severity_color}]{vuln.severity.upper()}[/{severity_color}]",
-                vuln.vuln_type,
+                f"[{severity_color}]{vuln.severity.value.upper()}[/{severity_color}]",
+                vuln.vuln_type.value,
                 vuln.description[:60] + "..." if len(vuln.description) > 60 else vuln.description,
                 f"${vuln.estimated_impact:,.0f}" if vuln.estimated_impact else "Unknown",
             )
         
         console.print(table)
+        
+        # Send alert if enabled and warranted
+        if alert and notifier.should_alert(result):
+            console.print("\n[yellow]📲 Sending alert...[/yellow]")
+            alert_results = asyncio.run(notifier.send_all(result))
+            for channel, success in alert_results.items():
+                status = "✅" if success else "❌"
+                console.print(f"  {status} {channel}")
     else:
         console.print("\n[bold green]✅ No vulnerabilities detected[/bold green]")
     
     console.print(f"\nConfidence: {result.confidence:.0%}")
+    console.print(f"Model: {result.model_used}")
     console.print(f"Analysis time: {result.analysis_time:.1f}s")
 
 
