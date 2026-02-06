@@ -4,8 +4,8 @@ import json
 import time
 from typing import Optional
 
-import anthropic
 import httpx
+import openai
 
 from .config import Config
 from .models import (
@@ -76,7 +76,14 @@ class Analyzer:
     
     def __init__(self, config: Config):
         self.config = config
-        self.client = anthropic.Anthropic(api_key=config.anthropic_api_key)
+        # Use OpenAI if available, otherwise Anthropic
+        if config.openai_api_key:
+            self.client = openai.OpenAI(api_key=config.openai_api_key)
+            self.use_openai = True
+        else:
+            import anthropic
+            self.client = anthropic.Anthropic(api_key=config.anthropic_api_key)
+            self.use_openai = False
         self.http = httpx.AsyncClient(timeout=60.0)
     
     async def analyze_contract(
@@ -124,15 +131,17 @@ class Analyzer:
         """Fetch contract source code from block explorer."""
         api_key = self.config.get_explorer_api_key(chain)
         
-        base_urls = {
-            "ethereum": "https://api.etherscan.io/api",
-            "bsc": "https://api.bscscan.com/api",
-            "base": "https://api.basescan.org/api",
+        # V2 API with chainid
+        chain_ids = {
+            "ethereum": 1,
+            "bsc": 56,
+            "base": 8453,
         }
         
-        base_url = base_urls.get(chain, base_urls["ethereum"])
+        base_url = "https://api.etherscan.io/v2/api"
         
         params = {
+            "chainid": chain_ids.get(chain, 1),
             "module": "contract",
             "action": "getsourcecode",
             "address": address,
@@ -196,15 +205,26 @@ class Analyzer:
             "deep": 8000,
         }.get(depth, 4000)
         
-        message = self.client.messages.create(
-            model=self.config.ai_model,
-            max_tokens=max_tokens,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-        )
-        
-        response_text = message.content[0].text
+        if self.use_openai:
+            response = self.client.chat.completions.create(
+                model=self.config.ai_model or "gpt-4o",
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+            )
+            response_text = response.choices[0].message.content
+            tokens_used = response.usage.total_tokens if response.usage else 0
+        else:
+            message = self.client.messages.create(
+                model=self.config.ai_model,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+            )
+            response_text = message.content[0].text
+            tokens_used = message.usage.input_tokens + message.usage.output_tokens
         
         # Parse response
         vulnerabilities = []
@@ -245,7 +265,7 @@ class Analyzer:
             contract=contract,
             vulnerabilities=vulnerabilities,
             confidence=confidence,
-            model_used=self.config.ai_model,
-            tokens_used=message.usage.input_tokens + message.usage.output_tokens,
+            model_used=self.config.ai_model or "gpt-4o",
+            tokens_used=tokens_used,
             raw_response=response_text,
         )
